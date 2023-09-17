@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 project(http2)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 include(FetchContent)
@@ -27,12 +27,22 @@ FetchContent_Declare(
 set(ENABLE_STATIC_LIB ON CACHE INTERNAL "")
 FetchContent_MakeAvailable(nghttp2)
 
+FetchContent_Declare(
+  libevent
+  URL "https://github.com/libevent/libevent/archive/refs/tags/release-2.1.12-stable.tar.gz"
+  SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third-party/libevent
+
+)
+
+set(ENABLE_STATIC_LIB ON CACHE INTERNAL "")
+FetchContent_MakeAvailable(libevent)
+
 
 add_executable(http2 main.cpp)
 
 target_include_directories(http2 PRIVATE third-party/nghttp2/lib/includes)
 
-target_link_libraries(http2 nghttp2)
+target_link_libraries(http2 nghttp2 event)
 
 
 
