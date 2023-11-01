@@ -129,15 +129,16 @@ nghttp2_session_callbacks *callbacks() {
         case NGHTTP2_HEADERS:
           /* Check that the client request has finished */
           if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
-              void *user_data = nghttp2_session_get_stream_user_data(
+              std::cout<< "NGHTTP2_FLAG_END_STREAM" << std::endl;
+              void *data = nghttp2_session_get_stream_user_data(
                   session, frame->hd.stream_id);
               /* For DATA and HEADERS frame, this callback may be called
               after
                  on_stream_close_callback. Check that stream still alive. */
-              if (!user_data) {
+              if (!data) {
                 return 0;
               }
-              auto stream_data = reinterpret_cast<http2_stream_data*>(user_data);
+              auto stream_data = reinterpret_cast<http2_stream_data*>(data);
             //   return on_request_recv(session, session_data, stream_data);
             on_request_recv(session, stream_data->stream_id);
             return 0;
