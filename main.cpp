@@ -12,8 +12,8 @@
 #include <memory>
 #include <nghttp2/nghttp2.h>
 #include <ostream>
-#include <string_view>
 #include <string>
+#include <string_view>
 struct http2_stream_data {
   // struct http2_stream_data *prev, *next;
   std::string request_path;
@@ -83,16 +83,17 @@ public:
         NGHTTP2_NV_FLAG_NONE                                                   \
   }
 
-int on_request_recv(nghttp2_session *session , uint32_t stream_id) {
-    nghttp2_nv hdrs[] = {MAKE_NV(":status", "200")};
-
-    auto rv = nghttp2_submit_response(session, stream_id, hdrs, ARRLEN(hdrs), nullptr);
+int on_request_recv(nghttp2_session *session, uint32_t stream_id) {
+  nghttp2_nv hdrs[] = {MAKE_NV(":status", "200")};
+  std::cout << "send response , stream: " << stream_id << std::endl;
+  auto rv =
+      nghttp2_submit_response(session, stream_id, hdrs, ARRLEN(hdrs), nullptr);
   if (rv != 0) {
     std::cout << "Fatal error: " << nghttp2_strerror(rv) << std::endl;
     return -1;
   }
   return 0;
-} 
+}
 
 nghttp2_session_callbacks *callbacks() {
   nghttp2_session_callbacks *callbacks;
@@ -112,7 +113,8 @@ nghttp2_session_callbacks *callbacks() {
          void *user_data) -> int {
         std::cout << "stream id: " << frame->hd.stream_id << std::endl;
         auto stream_data = new http2_stream_data{"/", frame->hd.stream_id};
-        nghttp2_session_set_stream_user_data(session, frame->hd.stream_id, stream_data);
+        nghttp2_session_set_stream_user_data(session, frame->hd.stream_id,
+                                             stream_data);
         return 0;
       });
 
@@ -129,16 +131,16 @@ nghttp2_session_callbacks *callbacks() {
         case NGHTTP2_HEADERS:
           /* Check that the client request has finished */
           if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
-              std::cout<< "NGHTTP2_FLAG_END_STREAM" << std::endl;
-              void *data = nghttp2_session_get_stream_user_data(
-                  session, frame->hd.stream_id);
-              /* For DATA and HEADERS frame, this callback may be called
-              after
-                 on_stream_close_callback. Check that stream still alive. */
-              if (!data) {
-                return 0;
-              }
-              auto stream_data = reinterpret_cast<http2_stream_data*>(data);
+            std::cout << "NGHTTP2_FLAG_END_STREAM" << std::endl;
+            void *data = nghttp2_session_get_stream_user_data(
+                session, frame->hd.stream_id);
+            /* For DATA and HEADERS frame, this callback may be called
+            after
+               on_stream_close_callback. Check that stream still alive. */
+            if (!data) {
+              return 0;
+            }
+            auto stream_data = reinterpret_cast<http2_stream_data *>(data);
             //   return on_request_recv(session, session_data, stream_data);
             on_request_recv(session, stream_data->stream_id);
             return 0;
