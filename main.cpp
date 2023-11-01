@@ -13,11 +13,12 @@
 #include <nghttp2/nghttp2.h>
 #include <ostream>
 #include <string_view>
+#include <string>
 struct http2_stream_data {
-  struct http2_stream_data *prev, *next;
-  char *request_path;
+  // struct http2_stream_data *prev, *next;
+  std::string request_path;
   int32_t stream_id;
-  int fd;
+  // int fd;
 };
 
 struct http2_session_data {
@@ -110,6 +111,8 @@ nghttp2_session_callbacks *callbacks() {
       [](nghttp2_session *session, const nghttp2_frame *frame,
          void *user_data) -> int {
         std::cout << "stream id: " << frame->hd.stream_id << std::endl;
+        auto stream_data = new http2_stream_data{"/", frame->hd.stream_id};
+        nghttp2_session_set_stream_user_data(session, frame->hd.stream_id, stream_data);
         return 0;
       });
 
@@ -118,24 +121,25 @@ nghttp2_session_callbacks *callbacks() {
       [](nghttp2_session *session, const nghttp2_frame *frame,
          void *user_data) -> int {
         std::cout << "receive " << frame->hd.type << " frame "
-                  << "<length=" << frame->data.hd.length
-                  << ", flags=" << frame->data.hd.flags
+                  << "<length=" << frame->hd.length
+                  << ", flags=" << frame->hd.flags
                   << ", stream_id=" << frame->hd.stream_id << ">" << std::endl;
         switch (frame->hd.type) {
         case NGHTTP2_DATA:
         case NGHTTP2_HEADERS:
           /* Check that the client request has finished */
           if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
-            //   stream_data = nghttp2_session_get_stream_user_data(
-            //       session, frame->hd.stream_id);
-            //   /* For DATA and HEADERS frame, this callback may be called
-            //   after
-            //      on_stream_close_callback. Check that stream still alive. */
-            //   if (!stream_data) {
-            //     return 0;
-            //   }
+              void *user_data = nghttp2_session_get_stream_user_data(
+                  session, frame->hd.stream_id);
+              /* For DATA and HEADERS frame, this callback may be called
+              after
+                 on_stream_close_callback. Check that stream still alive. */
+              if (!user_data) {
+                return 0;
+              }
+              auto stream_data = reinterpret_cast<http2_stream_data*>(user_data);
             //   return on_request_recv(session, session_data, stream_data);
-            on_request_recv(session, frame->hd.stream_id);
+            on_request_recv(session, stream_data->stream_id);
             return 0;
           }
           break;
