@@ -1,6 +1,7 @@
 #include "event2/buffer.h"
 #include "event2/bufferevent.h"
 #include "event2/event_struct.h"
+#include <_types/_uint32_t.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -76,6 +77,23 @@ public:
   static nghttp2_session_callbacks *callbacks_;
 };
 
+#define MAKE_NV(NAME, VALUE)                                                   \
+  {                                                                            \
+    (uint8_t *)NAME, (uint8_t *)VALUE, sizeof(NAME) - 1, sizeof(VALUE) - 1,    \
+        NGHTTP2_NV_FLAG_NONE                                                   \
+  }
+
+int on_request_recv(nghttp2_session *session , uint32_t stream_id) {
+    nghttp2_nv hdrs[] = {MAKE_NV(":status", "200")};
+
+    auto rv = nghttp2_submit_response(session, stream_id, hdrs, ARRLEN(hdrs), nullptr);
+  if (rv != 0) {
+    std::cout << "Fatal error: " << nghttp2_strerror(rv) << std::endl;
+    return -1;
+  }
+  return 0;
+} 
+
 nghttp2_session_callbacks *callbacks() {
   nghttp2_session_callbacks *callbacks;
   nghttp2_session_callbacks_new(&callbacks);
@@ -84,7 +102,8 @@ nghttp2_session_callbacks *callbacks() {
       [](nghttp2_session *, const nghttp2_frame *frame, const uint8_t *raw_name,
          size_t name_length, const uint8_t *raw_value, size_t value_length,
          uint8_t, void *user_data) -> int {
-        std::cout << "on headers: (" <<raw_name<< " : "<< raw_value <<")"  << std::endl;
+        std::cout << "on headers: (" << raw_name << " : " << raw_value << ")"
+                  << std::endl;
         return 0;
       });
   nghttp2_session_callbacks_set_on_begin_headers_callback(
@@ -99,7 +118,10 @@ nghttp2_session_callbacks *callbacks() {
       callbacks,
       [](nghttp2_session *session, const nghttp2_frame *frame,
          void *user_data) -> int {
-        std::cout << "frame_recv_callback" << std::endl;
+        std::cout << "receive " << frame->hd.type << " frame "
+                  << "<length=" << frame->data.hd.length
+                  << ", flags=" << frame->data.hd.flags
+                  << ", stream_id=" << frame->hd.stream_id << ">" << std::endl;
         switch (frame->hd.type) {
         case NGHTTP2_DATA:
         case NGHTTP2_HEADERS:
@@ -114,6 +136,7 @@ nghttp2_session_callbacks *callbacks() {
             //     return 0;
             //   }
             //   return on_request_recv(session, session_data, stream_data);
+            on_request_recv(session, frame->hd.stream_id);
             return 0;
           }
           break;
@@ -149,13 +172,14 @@ void onConnection(struct evconnlistener *listener, evutil_socket_t fd,
 
   sockaddr_in *sin = (sockaddr_in *)addr;
   std::cout << "new connection from : " << sin->sin_port << std::endl;
-  bevent = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
+  bevent = bufferevent_socket_new(
+      base, fd, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
   if (!bevent) {
     std::cout << "Error constructing bufferevent!";
     event_base_loopbreak(base);
     return;
   }
-  bufferevent_enable(bevent,  EV_READ|EV_WRITE);
+  bufferevent_enable(bevent, EV_READ | EV_WRITE);
 
   auto connetion = new Connection;
   connetion->sendServerConnHeaer();
@@ -168,7 +192,8 @@ void onConnection(struct evconnlistener *listener, evutil_socket_t fd,
         auto connection = reinterpret_cast<Connection *>(ctx);
         std::cout << "received " << len << " bytes data: " << data << std::endl;
         // auto readlen = connection->processData(data, len);
-        auto readlen = connection->processData(std::string_view(reinterpret_cast<char*>(data), len));
+        auto readlen = connection->processData(
+            std::string_view(reinterpret_cast<char *>(data), len));
         if (readlen < 0) {
           std::cout << "Fatal err " << nghttp2_strerror(int(readlen));
           return;
@@ -192,6 +217,7 @@ void onConnection(struct evconnlistener *listener, evutil_socket_t fd,
         }
         if (events & BEV_EVENT_EOF) {
           std::cout << "EOF" << std::endl;
+          delete connection;
         } else if (events & BEV_EVENT_ERROR) {
           std::cout << "network error" << std::endl;
         } else if (events & BEV_EVENT_TIMEOUT) {
