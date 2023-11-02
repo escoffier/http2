@@ -175,7 +175,8 @@ nghttp2_session_callbacks *callbacks() {
 
 nghttp2_session_callbacks *Connection::callbacks_ = callbacks();
 
-Connection::Connection(http2_session_data *session_data) : session_(nullptr, nullptr) {
+Connection::Connection(http2_session_data *session_data)
+    : session_(nullptr, nullptr) {
   session_ = makeSessionUniquePtr(callbacks(), session_data);
 }
 
@@ -195,7 +196,7 @@ int session_send(http2_session_data *session_data) {
   int rv;
   rv = nghttp2_session_send(session_data->session);
   if (rv != 0) {
-    std::cout << "Fatal error: " <<  nghttp2_strerror(rv);
+    std::cout << "Fatal error: " << nghttp2_strerror(rv);
     return -1;
   }
   return 0;
@@ -223,6 +224,8 @@ void onConnection(struct evconnlistener *listener, evutil_socket_t fd,
   bufferevent_setcb(
       bevent,
       [](struct bufferevent *bev, void *ctx) {
+        http2_session_data *session_data = (http2_session_data *)ctx;
+
         evbuffer *input = bufferevent_get_input(bev);
         auto len = evbuffer_get_length(input);
         unsigned char *data = evbuffer_pullup(input, -1);
@@ -239,6 +242,10 @@ void onConnection(struct evconnlistener *listener, evutil_socket_t fd,
 
         if (evbuffer_drain(input, len) != 0) {
           std::cout << "Fatal error: evbuffer_drain failed" << std::endl;
+          return;
+        }
+        if (session_send(session_data) != 0) {
+          delete session_data;
           return;
         }
       },
