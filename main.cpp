@@ -123,9 +123,9 @@ nghttp2_session_callbacks *callbacks() {
       callbacks,
       [](nghttp2_session *session, const nghttp2_frame *frame,
          void *user_data) -> int {
-        std::cout << "receive " << frame->hd.type << " frame "
+        std::cout << "receive " << int(frame->hd.type) << " frame "
                   << "<length=" << frame->hd.length
-                  << ", flags=" << frame->hd.flags
+                  << ", flags=" << int(frame->hd.flags)
                   << ", stream_id=" << frame->hd.stream_id << ">" << std::endl;
         switch (frame->hd.type) {
         case NGHTTP2_DATA:
