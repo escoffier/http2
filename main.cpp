@@ -41,10 +41,9 @@ void deleteSession(nghttp2_session *session) {
 }
 
 session_unque_ptr makeSessionUniquePtr(nghttp2_session_callbacks *callbacks,
-                                       bufferevent *bevt) {
+                                       http2_session_data *session_data) {
   std::cout << "session callbacks: " << callbacks << std::endl;
   // nghttp2_session *session;
-  http2_session_data *session_data = new http2_session_data{bevt,nullptr, ""};
   nghttp2_session_server_new(&session_data->session, callbacks, session_data);
   std::cout << "make session: " << session_data->session << std::endl;
   nghttp2_session_callbacks_del(callbacks);
@@ -54,7 +53,7 @@ session_unque_ptr makeSessionUniquePtr(nghttp2_session_callbacks *callbacks,
 #define ARRLEN(x) (sizeof(x) / sizeof(x[0]))
 class Connection {
 public:
-  Connection(bufferevent *bevt);
+  Connection(http2_session_data *session_data);
   ~Connection(){};
   int64_t processData(std::string_view data);
   int64_t processData(const uint8_t *data, size_t len);
@@ -158,7 +157,7 @@ nghttp2_session_callbacks *callbacks() {
       callbacks,
       [](nghttp2_session *session, const uint8_t *data, size_t length,
          int flags, void *user_data) -> ssize_t {
-        std::cout << "send callback" <<std::endl;
+        std::cout << "send callback" << std::endl;
         auto session_data = reinterpret_cast<http2_session_data *>(user_data);
         auto bevt = session_data->bev;
         /* Avoid excessive buffering in server side. */
@@ -176,8 +175,8 @@ nghttp2_session_callbacks *callbacks() {
 
 nghttp2_session_callbacks *Connection::callbacks_ = callbacks();
 
-Connection::Connection(bufferevent *bevt) : session_(nullptr, nullptr) {
-  session_ = makeSessionUniquePtr(callbacks(), bevt);
+Connection::Connection(http2_session_data *session_data) : session_(nullptr, nullptr) {
+  session_ = makeSessionUniquePtr(callbacks(), session_data);
 }
 
 int64_t Connection::processData(std::string_view data) {
@@ -190,6 +189,16 @@ int64_t Connection::processData(std::string_view data) {
 
 int64_t Connection::processData(const uint8_t *data, size_t len) {
   return nghttp2_session_mem_recv(session_.get(), data, len);
+}
+
+int session_send(http2_session_data *session_data) {
+  int rv;
+  rv = nghttp2_session_send(session_data->session);
+  if (rv != 0) {
+    std::cout << "Fatal error: " <<  nghttp2_strerror(rv);
+    return -1;
+  }
+  return 0;
 }
 
 void onConnection(struct evconnlistener *listener, evutil_socket_t fd,
@@ -207,8 +216,9 @@ void onConnection(struct evconnlistener *listener, evutil_socket_t fd,
     return;
   }
   bufferevent_enable(bevent, EV_READ | EV_WRITE);
-
-  auto connetion = new Connection(bevent);
+  http2_session_data *session_data =
+      new http2_session_data{bevent, nullptr, ""};
+  auto connetion = new Connection(session_data);
   connetion->sendServerConnHeaer();
   bufferevent_setcb(
       bevent,
@@ -233,7 +243,19 @@ void onConnection(struct evconnlistener *listener, evutil_socket_t fd,
         }
       },
       [](struct bufferevent *bev, void *ctx) {
-
+        http2_session_data *session_data = (http2_session_data *)ctx;
+        if (evbuffer_get_length(bufferevent_get_output(bev)) > 0) {
+          return;
+        }
+        if (nghttp2_session_want_read(session_data->session) == 0 &&
+            nghttp2_session_want_write(session_data->session) == 0) {
+          delete session_data;
+          return;
+        }
+        if (session_send(session_data) != 0) {
+          delete session_data;
+          return;
+        }
       },
       [](struct bufferevent *bev, short events, void *ctx) {
         std::cout << "eventcb" << std::endl;
