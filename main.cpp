@@ -44,7 +44,8 @@ session_unque_ptr makeSessionUniquePtr(nghttp2_session_callbacks *callbacks,
                                        bufferevent *bevt) {
   std::cout << "session callbacks: " << callbacks << std::endl;
   nghttp2_session *session;
-  nghttp2_session_server_new(&session, callbacks, bevt);
+  http2_session_data *session_data = new http2_session_data{bevt,session, ""};
+  nghttp2_session_server_new(&session, callbacks, session_data);
   std::cout << "make session: " << session << std::endl;
   nghttp2_session_callbacks_del(callbacks);
   return session_unque_ptr(session, deleteSession);
@@ -157,6 +158,7 @@ nghttp2_session_callbacks *callbacks() {
       callbacks,
       [](nghttp2_session *session, const uint8_t *data, size_t length,
          int flags, void *user_data) -> ssize_t {
+        std::cout << "send callback" <<std::endl;
         auto session_data = reinterpret_cast<http2_session_data *>(user_data);
         auto bevt = session_data->bev;
         /* Avoid excessive buffering in server side. */
