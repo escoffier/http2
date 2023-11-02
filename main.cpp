@@ -1,5 +1,6 @@
 #include "event2/buffer.h"
 #include "event2/bufferevent.h"
+#include "event2/bufferevent_struct.h"
 #include "event2/event_struct.h"
 #include <cstddef>
 #include <cstdint>
@@ -14,19 +15,18 @@
 #include <ostream>
 #include <string>
 #include <string_view>
+
+#define OUTPUT_WOULDBLOCK_THRESHOLD (1 << 16)
+
 struct http2_stream_data {
-  // struct http2_stream_data *prev, *next;
   std::string request_path;
   int32_t stream_id;
-  // int fd;
 };
 
 struct http2_session_data {
-  struct http2_stream_data root;
   struct bufferevent *bev;
-  // app_context *app_ctx;
   nghttp2_session *session;
-  char *client_addr;
+  std::string client_addr;
 };
 
 using SessionDeletor = void (*)(nghttp2_session *);
@@ -40,10 +40,11 @@ void deleteSession(nghttp2_session *session) {
   }
 }
 
-session_unque_ptr makeSessionUniquePtr(nghttp2_session_callbacks *callbacks) {
+session_unque_ptr makeSessionUniquePtr(nghttp2_session_callbacks *callbacks,
+                                       bufferevent *bevt) {
   std::cout << "session callbacks: " << callbacks << std::endl;
   nghttp2_session *session;
-  nghttp2_session_server_new(&session, callbacks, nullptr);
+  nghttp2_session_server_new(&session, callbacks, bevt);
   std::cout << "make session: " << session << std::endl;
   nghttp2_session_callbacks_del(callbacks);
   return session_unque_ptr(session, deleteSession);
@@ -52,7 +53,7 @@ session_unque_ptr makeSessionUniquePtr(nghttp2_session_callbacks *callbacks) {
 #define ARRLEN(x) (sizeof(x) / sizeof(x[0]))
 class Connection {
 public:
-  Connection();
+  Connection(bufferevent *bevt);
   ~Connection(){};
   int64_t processData(std::string_view data);
   int64_t processData(const uint8_t *data, size_t len);
@@ -151,13 +152,31 @@ nghttp2_session_callbacks *callbacks() {
         }
         return 0;
       });
+
+  nghttp2_session_callbacks_set_send_callback(
+      callbacks,
+      [](nghttp2_session *session, const uint8_t *data, size_t length,
+         int flags, void *user_data) -> ssize_t {
+        auto session_data = reinterpret_cast<http2_session_data *>(user_data);
+        auto bevt = session_data->bev;
+        /* Avoid excessive buffering in server side. */
+        if (evbuffer_get_length(bufferevent_get_output(session_data->bev)) >=
+            OUTPUT_WOULDBLOCK_THRESHOLD) {
+          return NGHTTP2_ERR_WOULDBLOCK;
+        }
+        bufferevent_write(session_data->bev, data, length);
+        return (ssize_t)length;
+      });
+
   std::cout << "create callbacks: " << callbacks << std::endl;
   return callbacks;
 }
 
 nghttp2_session_callbacks *Connection::callbacks_ = callbacks();
 
-Connection::Connection() : session_(makeSessionUniquePtr(callbacks_)) {}
+Connection::Connection(bufferevent *bevt) : session_(nullptr, nullptr) {
+  session_ = makeSessionUniquePtr(callbacks(), bevt);
+}
 
 int64_t Connection::processData(std::string_view data) {
   std::cout << "processData session: " << session_.get()
@@ -187,7 +206,7 @@ void onConnection(struct evconnlistener *listener, evutil_socket_t fd,
   }
   bufferevent_enable(bevent, EV_READ | EV_WRITE);
 
-  auto connetion = new Connection;
+  auto connetion = new Connection(bevent);
   connetion->sendServerConnHeaer();
   bufferevent_setcb(
       bevent,
