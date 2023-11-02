@@ -43,12 +43,12 @@ void deleteSession(nghttp2_session *session) {
 session_unque_ptr makeSessionUniquePtr(nghttp2_session_callbacks *callbacks,
                                        bufferevent *bevt) {
   std::cout << "session callbacks: " << callbacks << std::endl;
-  nghttp2_session *session;
-  http2_session_data *session_data = new http2_session_data{bevt,session, ""};
-  nghttp2_session_server_new(&session, callbacks, session_data);
-  std::cout << "make session: " << session << std::endl;
+  // nghttp2_session *session;
+  http2_session_data *session_data = new http2_session_data{bevt,nullptr, ""};
+  nghttp2_session_server_new(&session_data->session, callbacks, session_data);
+  std::cout << "make session: " << session_data->session << std::endl;
   nghttp2_session_callbacks_del(callbacks);
-  return session_unque_ptr(session, deleteSession);
+  return session_unque_ptr(session_data->session, deleteSession);
 }
 
 #define ARRLEN(x) (sizeof(x) / sizeof(x[0]))
