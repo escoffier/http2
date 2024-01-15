@@ -4,6 +4,8 @@ project(http2)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -g -fPIE")
+
 include(FetchContent)
 
 # FetchContent_Declare(llhttp
@@ -16,16 +18,16 @@ include(FetchContent)
 #   GIT_TAG        703bd9caab50b139428cea1aaff9974ebee5742e # release-1.10.0
 # )
 
-FetchContent_Declare(
-  nghttp2
-  URL "https://github.com/nghttp2/nghttp2/releases/download/v1.56.0/nghttp2-1.56.0.tar.gz"
-  SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third-party/nghttp2
+# FetchContent_Declare(
+#   nghttp2
+#   URL "https://github.com/nghttp2/nghttp2/releases/download/v1.56.0/nghttp2-1.56.0.tar.gz"
+#   SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third-party/nghttp2
 
-)
+# )
 
-# set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "")
-set(ENABLE_STATIC_LIB ON CACHE INTERNAL "")
-FetchContent_MakeAvailable(nghttp2)
+# # set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "")
+# FetchContent_MakeAvailable(nghttp2)
+# set(ENABLE_STATIC_LIB ON CACHE INTERNAL "")
 
 FetchContent_Declare(
   libevent
@@ -40,12 +42,13 @@ FetchContent_MakeAvailable(libevent)
 
 add_executable(http2 main.cpp)
 
-target_include_directories(http2 PRIVATE third-party/nghttp2/lib/includes)
+# target_include_directories(http2 PRIVATE third-party/nghttp2/lib/includes)
 
 #target_link_libraries(http2 nghttp2 event libtcmalloc_minimal.a)
 #target_link_libraries(http2 nghttp2 event libunwind-x86_64.a libunwind.a liblzma.a libtcmalloc_and_profiler.a)
-#target_link_libraries(http2 nghttp2 event tcmalloc)
-target_link_libraries(http2 nghttp2 event)
+target_link_libraries(http2 libnghttp2.a libevent.a libunwind.a liblzma.a libtcmalloc_and_profiler.a)
+# target_link_libraries(http2 nghttp2 event tcmalloc)
+# target_link_libraries(http2 nghttp2 event)
 
 
 

@@ -16,8 +16,11 @@
 #include <string>
 #include <string_view>
 
+#include "gperftools/heap-profiler.h"
+
 #define OUTPUT_WOULDBLOCK_THRESHOLD (1 << 16)
 
+static bool profileStarted = false;
 struct http2_stream_data {
   std::string request_path;
   int32_t stream_id;
@@ -87,6 +90,18 @@ public:
 int on_request_recv(nghttp2_session *session, uint32_t stream_id) {
   nghttp2_nv hdrs[] = {MAKE_NV(":status", "200")};
   std::cout << "send response , stream: " << stream_id << std::endl;
+
+  if (!profileStarted) {
+    HeapProfilerStart("./http2-prof");
+    profileStarted = true;
+  } else {
+    if (IsHeapProfilerRunning()) {
+      HeapProfilerDump("dump heap");
+      HeapProfilerStop();
+      profileStarted = false;
+    }
+  }
+
   auto rv =
       nghttp2_submit_response(session, stream_id, hdrs, ARRLEN(hdrs), nullptr);
   if (rv != 0) {
