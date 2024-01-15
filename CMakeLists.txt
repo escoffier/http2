@@ -42,6 +42,9 @@ add_executable(http2 main.cpp)
 
 target_include_directories(http2 PRIVATE third-party/nghttp2/lib/includes)
 
+#target_link_libraries(http2 nghttp2 event libtcmalloc_minimal.a)
+#target_link_libraries(http2 nghttp2 event libunwind-x86_64.a libunwind.a liblzma.a libtcmalloc_and_profiler.a)
+#target_link_libraries(http2 nghttp2 event tcmalloc)
 target_link_libraries(http2 nghttp2 event)
 
 

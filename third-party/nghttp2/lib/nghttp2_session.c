@@ -4702,7 +4702,8 @@ int nghttp2_session_on_settings_received(nghttp2_session *session,
   nghttp2_inflight_settings *settings;
 
   mem = &session->mem;
-
+  
+  fprintf(stdout, "nghttp2_session_on_settings_received\n");
   if (frame->hd.stream_id != 0) {
     return session_handle_invalid_connection(session, frame, NGHTTP2_ERR_PROTO,
                                              "SETTINGS: stream_id != 0");
@@ -4713,7 +4714,8 @@ int nghttp2_session_on_settings_received(nghttp2_session *session,
           session, frame, NGHTTP2_ERR_FRAME_SIZE_ERROR,
           "SETTINGS: ACK and payload != 0");
     }
-
+    
+    fprintf(stdout, "skip setting ack frame: %d\n", frame->hd.stream_id);
     settings = session->inflight_settings_head;
 
     if (!settings) {
